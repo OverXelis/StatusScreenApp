@@ -6,8 +6,7 @@ A local, single-file character stat tracker for litRPG fantasy novels. It models
 
 ## Use it
 
-**Online (easiest):** open the live version —
-👉 **https://overxelis.github.io/StatusScreenApp/**
+**Online (easiest):** open the live version —> **https://overxelis.github.io/StatusScreenApp/**
 
 **Offline / your own copy:**
 1. Download [`StatusScreenApp.html`](StatusScreenApp.html) (on the file page, click the download / "Raw" button and save it).
@@ -41,7 +40,7 @@ Use **Backup (JSON)** in the sidebar to export *all* your characters at once (fo
 
 ## Data & privacy
 
-Everything is stored locally in your browser's `localStorage` — nothing is uploaded anywhere. Clearing your browser data will remove saved characters, so use **Backup (JSON)** periodically.
+Everything is stored locally in the browser's `localStorage` — nothing is uploaded anywhere. Clearing your browser data will remove saved characters, so use **Backup (JSON)** periodically.
 
 ## Versioning
 
