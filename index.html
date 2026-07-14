@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Screen — LitRPG Character Tracker</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171c23; --panel2:#1e252e; --edge:#2a333f;
+    --ink:#e7edf3; --dim:#93a1b0; --faint:#63707e;
+    --accent:#5aa9ff; --accent2:#7de0c0; --warn:#ffb454; --bad:#ff6b6b; --good:#79d18a;
+    --phys:#ff8a6b; --mag:#6ba8ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+  button{font:inherit;cursor:pointer;color:var(--ink);background:var(--panel2);border:1px solid var(--edge);border-radius:6px;padding:5px 10px}
+  button:hover{border-color:var(--accent);color:#fff}
+  button.primary{background:var(--accent);color:#04121f;border-color:var(--accent);font-weight:600}
+  button.ghost{background:transparent}
+  button.danger{border-color:#5a2a2a;color:#ff9c9c}
+  button.danger:hover{background:#3a1c1c;border-color:var(--bad)}
+  button.tiny{padding:2px 7px;font-size:12px}
+  input,select,textarea{font:inherit;color:var(--ink);background:#10151b;border:1px solid var(--edge);border-radius:5px;padding:5px 7px}
+  input:focus,select,textarea:focus{outline:none;border-color:var(--accent)}
+  input[type=number]{width:70px}
+  textarea{width:100%;resize:vertical;min-height:52px}
+  label{color:var(--dim);font-size:12px}
+  h1,h2,h3{margin:0}
+  a{color:var(--accent)}
+  .app{display:flex;height:100vh;overflow:hidden}
+  /* Sidebar */
+  .sidebar{width:250px;flex:none;background:var(--panel);border-right:1px solid var(--edge);display:flex;flex-direction:column}
+  .brand{padding:14px 14px 10px;border-bottom:1px solid var(--edge)}
+  .brand h1{font-size:15px;letter-spacing:.5px}
+  .brand p{margin:3px 0 0;color:var(--faint);font-size:11px}
+  .charlist{flex:1;overflow:auto;padding:8px}
+  .charitem{padding:8px 10px;border-radius:7px;margin-bottom:5px;border:1px solid transparent;cursor:pointer}
+  .charitem:hover{background:var(--panel2)}
+  .charitem.active{background:var(--panel2);border-color:var(--accent)}
+  .charitem .nm{font-weight:600}
+  .charitem .meta{color:var(--faint);font-size:11px;margin-top:2px}
+  .sidefoot{padding:10px;border-top:1px solid var(--edge);display:flex;flex-direction:column;gap:6px}
+  .sidefoot .row{display:flex;gap:6px}
+  .sidefoot .row button{flex:1}
+  /* Main */
+  .main{flex:1;overflow:auto;display:flex;flex-direction:column}
+  .empty{margin:auto;text-align:center;color:var(--faint);max-width:420px;padding:40px}
+  .topbar{padding:14px 20px;border-bottom:1px solid var(--edge);background:var(--panel)}
+  .topgrid{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:3px}
+  .field .big{font-size:15px}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--edge)}
+  .rank{background:#221a12;color:var(--warn);border-color:#4a3620}
+  .rarity-Common{color:#c4cdd6;border-color:#3a444f}
+  .rarity-Uncommon{color:#79d18a;border-color:#2f5a38}
+  .rarity-Rare{color:#5aa9ff;border-color:#274a70}
+  .rarity-Epic{color:#c88bff;border-color:#4a2f66}
+  .rarity-Legendary{color:#ffb454;border-color:#5a4020}
+  .tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--edge);background:var(--panel)}
+  .tab{padding:10px 14px;border:none;border-bottom:2px solid transparent;background:transparent;border-radius:0;color:var(--dim)}
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:#fff;border-bottom-color:var(--accent)}
+  .content{padding:20px;flex:1}
+  .panel{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:16px;margin-bottom:16px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .panel h2 .sp{flex:1}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  /* Stats */
+  .statgroup h3{font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  .statgroup.phys h3{color:var(--phys)}
+  .statgroup.mag h3{color:var(--mag)}
+  .stat{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:7px;background:var(--panel2);margin-bottom:6px;position:relative}
+  .stat .snm{width:104px;font-weight:600}
+  .stat .final{font-size:20px;font-weight:700;width:58px;text-align:right}
+  .stat.phys .final{color:var(--phys)} .stat.mag .final{color:var(--mag)}
+  .stat .alloc{display:flex;align-items:center;gap:4px;margin-left:auto}
+  .stat .bd{color:var(--faint);font-size:11px;cursor:help;border-bottom:1px dotted var(--faint)}
+  .popover{position:absolute;z-index:20;top:100%;left:9px;margin-top:4px;background:#0b0f14;border:1px solid var(--accent);border-radius:8px;padding:10px;min-width:220px;box-shadow:0 8px 30px rgba(0,0,0,.6);font-size:12px}
+  .popover table{width:100%;border-collapse:collapse}
+  .popover td{padding:2px 0}
+  .popover td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+  .popover tr.tot td{border-top:1px solid var(--edge);padding-top:4px;font-weight:700}
+  /* list items */
+  .item{background:var(--panel2);border:1px solid var(--edge);border-radius:8px;padding:11px;margin-bottom:9px}
+  .item .hd{display:flex;align-items:center;gap:8px}
+  .item .hd .nm{font-weight:600}
+  .item .hd .sp{flex:1}
+  .item .desc{color:var(--dim);font-size:13px;margin-top:5px;white-space:pre-wrap}
+  .bonusgrid{display:grid;grid-template-columns:repeat(4,auto);gap:4px 10px;margin-top:8px}
+  .bonusgrid .b{font-size:12px;color:var(--faint)}
+  .bonusgrid .b b{color:var(--good)}
+  .miniedit{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}
+  .miniedit .mf{display:flex;flex-direction:column;gap:2px}
+  .muted{color:var(--faint);font-size:12px}
+  .tierbar{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .history{margin-top:8px;border-left:2px solid var(--edge);padding-left:10px}
+  .history .h{font-size:12px;color:var(--faint);margin-bottom:4px}
+  .toolrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  /* table */
+  table.ref{border-collapse:collapse;width:100%;font-size:13px}
+  table.ref th,table.ref td{border:1px solid var(--edge);padding:5px 8px;text-align:center}
+  table.ref th{background:var(--panel2);color:var(--dim)}
+  table.ref td.hl{background:#12233a;color:#fff;font-weight:700;outline:1px solid var(--accent)}
+  table.ref td.rar{text-align:left;font-weight:600}
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50}
+  .modal{background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:88vh;overflow:auto}
+  .modal h2{font-size:16px;margin-bottom:14px}
+  .modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .formrow{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+  .snaprow{display:flex;align-items:center;gap:10px;padding:9px;background:var(--panel2);border-radius:7px;margin-bottom:7px}
+  .snaprow .sp{flex:1}
+  .kpi{display:inline-flex;flex-direction:column;background:var(--panel2);border:1px solid var(--edge);border-radius:8px;padding:6px 12px}
+  .kpi b{font-size:18px}
+  .kpi span{font-size:11px;color:var(--faint)}
+  .hint{background:#12202e;border:1px solid #244055;color:#a9c9e6;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <h1>⚔ STATUS SCREEN</h1>
+      <p>LitRPG character tracker</p>
+    </div>
+    <div class="charlist" id="charlist"></div>
+    <div class="sidefoot">
+      <button class="primary" onclick="newCharacter()">+ New Character</button>
+      <div class="row">
+        <button class="ghost tiny" onclick="exportAll()">Export</button>
+        <button class="ghost tiny" onclick="document.getElementById('importfile').click()">Import</button>
+      </div>
+      <input type="file" id="importfile" accept="application/json" style="display:none" onchange="importFile(event)">
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<div id="modalroot"></div>
+
+<script>
+/* ---------------- Constants ---------------- */
+const STATS = [
+  {key:'strength',    label:'Strength',     grp:'phys'},
+  {key:'agility',     label:'Agility',      grp:'phys'},
+  {key:'constitution',label:'Constitution', grp:'phys'},
+  {key:'vitality',    label:'Vitality',     grp:'phys'},
+  {key:'intellect',   label:'Intellect',    grp:'mag'},
+  {key:'willpower',   label:'Willpower',    grp:'mag'},
+  {key:'mana',        label:'Mana',         grp:'mag'},
+  {key:'wisdom',      label:'Wisdom',       grp:'mag'},
+];
+const STATKEYS = STATS.map(s=>s.key);
+const RARITIES = ['Common','Uncommon','Rare','Epic','Legendary'];
+const PROFS = ['Novice','Journeyman','Adept','Expert','Master'];
+// Stats granted per level, [Novice, Journeyman, Adept, Expert, Master]
+const TABLE = {
+  Common:   [2,3,4,5,6],
+  Uncommon: [4,6,9,13,19],
+  Rare:     [8,12,18,27,40],
+  Epic:     [12,18,27,40,60],
+  Legendary:[16,24,36,54,81],
+};
+const RANKS = ['E','D','C','B','A','S']; // every 30 levels
+
+/* ---------------- State / persistence ---------------- */
+const LS_KEY = 'statusScreenApp.v1';
+let DB = load();
+let ui = { tab:'stats', pop:null };
+
+function load(){
+  try{ const raw = localStorage.getItem(LS_KEY); if(raw) return JSON.parse(raw); }catch(e){}
+  return { characters:{}, activeId:null };
+}
+function save(){
+  const c = active(); if(c) c.updatedAt = Date.now();
+  localStorage.setItem(LS_KEY, JSON.stringify(DB));
+}
+function active(){ return DB.characters[DB.activeId] || null; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function zeroStats(v=0){ const o={}; STATKEYS.forEach(k=>o[k]=v); return o; }
+
+/* ---------------- Character factory ---------------- */
+function blankCharacter(){
+  return {
+    id: uid(),
+    name:'New Character',
+    level:1,
+    createdAt: Date.now(), updatedAt: Date.now(),
+    class:{ name:'', rarity:'Common', proficiency:'Novice', perLevel: zeroStats(0) },
+    base: zeroStats(10),
+    freeBank: 0,
+    freeAlloc: zeroStats(0),
+    classStats: zeroStats(0),
+    titles: [],
+    gear: [],
+    activeSkills: [],
+    passiveSkills: [],
+    snapshots: [],
+  };
+}
+// backfill any missing fields on load (forward-compat)
+function normalize(c){
+  const b = blankCharacter();
+  for(const k in b){ if(c[k]===undefined) c[k]=b[k]; }
+  STATKEYS.forEach(k=>{
+    if(c.base[k]===undefined)c.base[k]=0;
+    if(c.freeAlloc[k]===undefined)c.freeAlloc[k]=0;
+    if(c.classStats[k]===undefined)c.classStats[k]=0;
+    if(c.class.perLevel[k]===undefined)c.class.perLevel[k]=0;
+  });
+  return c;
+}
+
+/* ---------------- Derived ---------------- */
+function rankForLevel(lvl){ return RANKS[Math.min(RANKS.length-1, Math.floor((lvl-1)/30))]; }
+function perLevelBudget(cls){ return TABLE[cls.rarity][PROFS.indexOf(cls.proficiency)]; }
+function sumStats(o){ return STATKEYS.reduce((a,k)=>a+(+o[k]||0),0); }
+
+// Compute one stat with full breakdown. `data` is a character-like object.
+function computeStat(data, key){
+  const base = +data.base[key]||0;
+  const free = +data.freeAlloc[key]||0;
+  const cls  = +data.classStats[key]||0;
+  const subtotal = base+free+cls;
+  let titleFlat=0, titlePct=0;
+  (data.titles||[]).forEach(t=>{ titleFlat += +t.flat[key]||0; titlePct += +t.percent[key]||0; });
+  const afterTitle = (subtotal + titleFlat) * (1 + titlePct/100);
+  let gearFlat=0, gearPct=0;
+  (data.gear||[]).forEach(g=>{ if(g.active){ gearFlat += +g.flat[key]||0; gearPct += +g.percent[key]||0; } });
+  const final = (afterTitle + gearFlat) * (1 + gearPct/100);
+  return { base, free, cls, subtotal, titleFlat, titlePct, afterTitle, gearFlat, gearPct, final: Math.round(final) };
+}
+
+/* ---------------- Mutations ---------------- */
+function setPath(fn){ fn(active()); save(); render(); }
+
+function levelUp(n){
+  const c=active(); if(!c) return;
+  const times = n||1;
+  for(let i=0;i<times;i++){
+    c.level++;
+    c.freeBank += 3;
+    STATKEYS.forEach(k=> c.classStats[k] += (+c.class.perLevel[k]||0));
+  }
+  save(); render();
+}
+function levelDown(){
+  const c=active(); if(!c||c.level<=1) return;
+  c.level--;
+  c.freeBank = Math.max(0, c.freeBank-3);
+  STATKEYS.forEach(k=> c.classStats[k] -= (+c.class.perLevel[k]||0));
+  save(); render();
+}
+function allocFree(key, d){
+  const c=active();
+  if(d>0){ if(c.freeBank<=0) return; c.freeBank--; c.freeAlloc[key]++; }
+  else { if(c.freeAlloc[key]<=0) return; c.freeAlloc[key]--; c.freeBank++; }
+  save(); render();
+}
+function autoFillPerLevel(){
+  // distribute the class budget evenly across stats the user has weighted, else evenly across all 8
+  const c=active(); const budget=perLevelBudget(c.class);
+  const weighted = STATKEYS.filter(k=> (+c.class.perLevel[k]||0)>0);
+  const targets = weighted.length? weighted : STATKEYS;
+  const each = Math.floor(budget/targets.length); let rem = budget - each*targets.length;
+  targets.forEach(k=>{ c.class.perLevel[k]= each + (rem-->0?1:0); });
+  save(); render();
+}
+
+/* Snapshots */
+function takeSnapshot(label){
+  const c=active();
+  const data = clone(c); delete data.snapshots; // don't nest snapshots
+  c.snapshots.unshift({ id:uid(), label: label||('Snapshot @ Lv '+c.level), level:c.level,
+    className:c.class.name, rarity:c.class.rarity, proficiency:c.class.proficiency,
+    timestamp: Date.now(), data });
+  save(); render();
+}
+function revertSnapshot(sid){
+  const c=active(); const s=c.snapshots.find(x=>x.id===sid); if(!s) return;
+  if(!confirm('Revert this character to "'+s.label+'"?\nCurrent snapshots are kept; everything else is overwritten.')) return;
+  const keep = c.snapshots;
+  Object.assign(c, clone(s.data));
+  c.snapshots = keep;
+  save(); render();
+}
+function deleteSnapshot(sid){
+  const c=active(); c.snapshots = c.snapshots.filter(x=>x.id!==sid); save(); render();
+}
+
+/* ---------------- Rendering ---------------- */
+function render(){
+  renderSidebar();
+  const main = document.getElementById('main');
+  const c = active();
+  if(!c){ main.innerHTML = `<div class="empty"><h2>No character selected</h2>
+    <p>Create a new character or import a saved file to begin. Everything is stored locally in this browser and auto-saved as you edit.</p></div>`; return; }
+  main.innerHTML = topbar(c) + tabsBar() + `<div class="content">${tabContent(c)}</div>`;
+}
+
+function renderSidebar(){
+  const list = document.getElementById('charlist');
+  const chars = Object.values(DB.characters).sort((a,b)=>b.updatedAt-a.updatedAt);
+  if(!chars.length){ list.innerHTML = `<p class="muted" style="padding:10px">No characters yet.</p>`; return; }
+  list.innerHTML = chars.map(c=>`
+    <div class="charitem ${c.id===DB.activeId?'active':''}" onclick="selectChar('${c.id}')">
+      <div class="nm">${esc(c.name||'Unnamed')}</div>
+      <div class="meta">Lv ${c.level} · ${RANKS.includes(rankForLevel(c.level))?rankForLevel(c.level):''}-Rank · ${esc(c.class.name||'No class')}</div>
+    </div>`).join('');
+}
+
+function topbar(c){
+  const rank = rankForLevel(c.level);
+  return `<div class="topbar"><div class="topgrid">
+    <div class="field"><label>Name</label>
+      <input class="big" style="width:200px" value="${esc(c.name)}" onchange="edit('name',this.value)"></div>
+    <div class="field"><label>Level (never resets)</label>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="tiny" onclick="levelDown()">−</button>
+        <input type="number" style="width:80px;font-size:16px;font-weight:700" value="${c.level}" onchange="editNum('level',this.value,1)">
+        <button class="tiny" onclick="levelUp(1)">+ Lv</button>
+      </div></div>
+    <div class="field"><label>Rank</label><span class="badge rank">${rank}-Rank</span></div>
+    <div class="field"><label>Class</label>
+      <span class="badge rarity-${c.class.rarity}">${esc(c.class.name||'—')} · ${c.class.rarity}</span></div>
+    <div class="field"><label>Proficiency</label><span class="badge">${c.class.proficiency}</span></div>
+    <div class="field"><label>Free Points (bank)</label>
+      <span class="kpi"><b style="color:var(--accent2)">${c.freeBank}</b><span>unspent</span></span></div>
+    <div class="field" style="margin-left:auto"><label>&nbsp;</label>
+      <button class="danger tiny" onclick="deleteChar('${c.id}')">Delete character</button></div>
+  </div></div>`;
+}
+
+function tabsBar(){
+  const tabs=[['stats','Stats'],['class','Class'],['titles','Titles'],['gear','Gear & Consumables'],['skills','Skills'],['snapshots','Snapshots']];
+  return `<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${ui.tab===k?'active':''}" onclick="setTab('${k}')">${l}</button>`).join('')}</div>`;
+}
+function setTab(t){ ui.tab=t; ui.pop=null; render(); }
+
+function tabContent(c){
+  switch(ui.tab){
+    case 'stats': return statsTab(c);
+    case 'class': return classTab(c);
+    case 'titles': return titlesTab(c);
+    case 'gear': return gearTab(c);
+    case 'skills': return skillsTab(c);
+    case 'snapshots': return snapshotsTab(c);
+  }
+}
+
+/* ---- Stats tab ---- */
+function statsTab(c){
+  const grp = g => STATS.filter(s=>s.grp===g).map(s=>statRow(c,s)).join('');
+  return `
+  <div class="hint">Final value = (Base + Free points + Class) then Title bonuses, then Gear/consumables last. Hover “breakdown” on any stat to see the math. Base &amp; Class values are directly editable in the panels below the stat rows.</div>
+  <div class="panel"><h2>Attributes<span class="sp"></span>
+    <span class="muted">Free-point bank: <b style="color:var(--accent2)">${c.freeBank}</b> — click + to spend, − to refund</span></h2>
+    <div class="cols">
+      <div class="statgroup phys"><h3>Physical</h3>${grp('phys')}</div>
+      <div class="statgroup mag"><h3>Magical</h3>${grp('mag')}</div>
+    </div>
+  </div>
+  <div class="cols">
+    <div class="panel"><h2>Base stats <span class="muted">(starting / manually set)</span></h2>
+      ${STATS.map(s=>miniNum(s.label, c.base[s.key], `editStat('base','${s.key}',this.value)`)).join('')}
+    </div>
+    <div class="panel"><h2>Class-accumulated stats <span class="muted">(earned from leveling)</span></h2>
+      <p class="muted" style="margin:-4px 0 10px">Auto-filled by “Level up”. Edit directly to seed an existing character.</p>
+      ${STATS.map(s=>miniNum(s.label, c.classStats[s.key], `editStat('classStats','${s.key}',this.value)`)).join('')}
+    </div>
+  </div>`;
+}
+function statRow(c,s){
+  const b=computeStat(c,s.key);
+  const open = ui.pop==='stat:'+s.key;
+  return `<div class="stat ${s.grp}">
+    <span class="snm">${s.label}</span>
+    <span class="final">${b.final}</span>
+    <span class="bd" onclick="togglePop('stat:${s.key}')">breakdown</span>
+    <span class="alloc">
+      <button class="tiny" onclick="allocFree('${s.key}',-1)" title="Refund a free point">−</button>
+      <span title="Free points spent here" style="min-width:16px;text-align:center;color:var(--accent2)">${c.freeAlloc[s.key]}</span>
+      <button class="tiny" onclick="allocFree('${s.key}',1)" title="Spend a free point">+</button>
+    </span>
+    ${open?popover(b):''}
+  </div>`;
+}
+function popover(b){
+  const row=(l,v,c2)=>`<tr><td>${l}</td><td style="color:${c2||'inherit'}">${v}</td></tr>`;
+  return `<div class="popover">
+    <table>
+      ${row('Base', b.base)}
+      ${row('Free points', '+'+b.free, 'var(--accent2)')}
+      ${row('Class', '+'+b.cls, 'var(--phys)')}
+      <tr class="tot"><td>Subtotal</td><td>${b.subtotal}</td></tr>
+      ${b.titleFlat?row('Title flat','+'+b.titleFlat,'var(--good)'):''}
+      ${b.titlePct?row('Title %','×'+(1+b.titlePct/100).toFixed(2),'var(--good)'):''}
+      ${(b.titleFlat||b.titlePct)?`<tr class="tot"><td>After titles</td><td>${Math.round(b.afterTitle)}</td></tr>`:''}
+      ${b.gearFlat?row('Gear flat','+'+b.gearFlat,'var(--warn)'):''}
+      ${b.gearPct?row('Gear %','×'+(1+b.gearPct/100).toFixed(2),'var(--warn)'):''}
+      <tr class="tot"><td>Final</td><td>${b.final}</td></tr>
+    </table></div>`;
+}
+function togglePop(id){ ui.pop = ui.pop===id?null:id; render(); }
+
+/* ---- Class tab ---- */
+function classTab(c){
+  const budget = perLevelBudget(c.class);
+  const assigned = sumStats(c.class.perLevel);
+  return `
+  <div class="panel"><h2>Current Class</h2>
+    <div class="miniedit">
+      <div class="mf"><label>Class name</label><input value="${esc(c.class.name)}" onchange="edit('class.name',this.value)"></div>
+      <div class="mf"><label>Rarity</label>${sel(RARITIES,c.class.rarity,"edit('class.rarity',this.value)")}</div>
+      <div class="mf"><label>Proficiency</label>${sel(PROFS,c.class.proficiency,"edit('class.proficiency',this.value)")}</div>
+    </div>
+    <div class="toolrow" style="margin-top:14px">
+      <button class="primary" onclick="levelUp(1)">▲ Level Up (+3 free, +class stats)</button>
+      <button onclick="bulkLevel()">Add multiple levels…</button>
+      <button onclick="openProficiency()">Advance Proficiency ▸</button>
+      <button onclick="openClassChange()">Change / Evolve Class ▸</button>
+    </div>
+    <div class="hint" style="margin-bottom:0">This class grants <b>${budget}</b> stats per level (${c.class.rarity} · ${c.class.proficiency}). You've assigned <b style="color:${assigned===budget?'var(--good)':'var(--warn)'}">${assigned}</b> across the stats below. <button class="tiny" onclick="autoFillPerLevel()">Auto-distribute ${budget}</button></div>
+  </div>
+
+  <div class="panel"><h2>Per-Level Stat Gains <span class="muted">(applied each “Level Up”)</span></h2>
+    <div class="cols">
+      <div class="statgroup phys"><h3>Physical</h3>${STATS.filter(s=>s.grp==='phys').map(s=>miniNum(s.label,c.class.perLevel[s.key],`editStat('class.perLevel','${s.key}',this.value)`)).join('')}</div>
+      <div class="statgroup mag"><h3>Magical</h3>${STATS.filter(s=>s.grp==='mag').map(s=>miniNum(s.label,c.class.perLevel[s.key],`editStat('class.perLevel','${s.key}',this.value)`)).join('')}</div>
+    </div>
+  </div>
+
+  <div class="panel"><h2>Stats-Per-Level Reference</h2>${refTable(c.class)}</div>`;
+}
+function refTable(cls){
+  const pi = PROFS.indexOf(cls.proficiency);
+  let h=`<table class="ref"><tr><th>Rarity</th>${PROFS.map(p=>`<th>${p}</th>`).join('')}</tr>`;
+  RARITIES.forEach(r=>{
+    h+=`<tr><td class="rar rarity-${r}">${r}</td>`+TABLE[r].map((v,i)=>`<td class="${r===cls.rarity&&i===pi?'hl':''}">${v}</td>`).join('')+`</tr>`;
+  });
+  return h+`</table><p class="muted" style="margin-top:8px">Evolving to a higher rarity usually resets proficiency to Novice — fewer points short-term, more long-term. Levels never reset.</p>`;
+}
+
+/* ---- Titles tab ---- */
+function titlesTab(c){
+  return `<div class="hint">Titles are never lost. They give flat stat bonuses or a % increase (% is applied after all other additions, before gear). Leave a field at 0 to ignore it.</div>
+  <div class="toolrow"><button class="primary" onclick="addTitle()">+ Add Title</button></div>
+  ${c.titles.length? c.titles.map((t,i)=>bonusItem('titles',t,i)).join('') : `<p class="muted">No titles yet.</p>`}`;
+}
+/* ---- Gear tab ---- */
+function gearTab(c){
+  return `<div class="hint">Gear &amp; consumables are temporary stat boosters, applied last (after titles). Toggle “Active” off when the effect ends instead of deleting it.</div>
+  <div class="toolrow"><button class="primary" onclick="addGear()">+ Add Gear / Consumable</button></div>
+  ${c.gear.length? c.gear.map((g,i)=>bonusItem('gear',g,i)).join('') : `<p class="muted">No gear or consumables yet.</p>`}`;
+}
+function bonusItem(coll,obj,i){
+  const flats = STATS.filter(s=> (+obj.flat[s.key])||(+obj.percent[s.key]));
+  const isGear = coll==='gear';
+  const summary = flats.length? `<div class="bonusgrid">${flats.map(s=>{
+      const f=+obj.flat[s.key]||0, p=+obj.percent[s.key]||0;
+      let parts=[]; if(f)parts.push('+'+f); if(p)parts.push('+'+p+'%');
+      return `<span class="b">${s.label} <b>${parts.join(' ')}</b></span>`;
+    }).join('')}</div>` : `<div class="muted" style="margin-top:6px">No stat bonuses set.</div>`;
+  const open = ui.pop===coll+':'+i;
+  return `<div class="item">
+    <div class="hd">
+      ${isGear?`<input type="checkbox" ${obj.active?'checked':''} onchange="toggleGear(${i})" title="Active">`:''}
+      <input class="nm" style="background:transparent;border:none;font-size:15px" value="${esc(obj.name)}" onchange="editColl('${coll}',${i},'name',this.value)">
+      <span class="sp"></span>
+      ${isGear?`<span class="badge ${obj.active?'':'muted'}">${obj.active?'Active':'Inactive'}</span>`:''}
+      <button class="tiny" onclick="togglePop('${coll}:${i}')">${open?'Close':'Edit bonuses'}</button>
+      <button class="tiny danger" onclick="removeColl('${coll}',${i})">✕</button>
+    </div>
+    <textarea placeholder="Description…" onchange="editColl('${coll}',${i},'description',this.value)">${esc(obj.description||'')}</textarea>
+    ${summary}
+    ${open?bonusEditor(coll,obj,i):''}
+  </div>`;
+}
+function bonusEditor(coll,obj,i){
+  return `<div style="margin-top:10px;border-top:1px solid var(--edge);padding-top:10px">
+    <div class="cols">
+      <div><h3 class="muted">Flat bonuses (+)</h3>${STATS.map(s=>miniNum(s.label,obj.flat[s.key],`editBonus('${coll}',${i},'flat','${s.key}',this.value)`)).join('')}</div>
+      <div><h3 class="muted">Percent bonuses (%)</h3>${STATS.map(s=>miniNum(s.label,obj.percent[s.key],`editBonus('${coll}',${i},'percent','${s.key}',this.value)`)).join('')}</div>
+    </div></div>`;
+}
+
+/* ---- Skills tab ---- */
+function skillsTab(c){
+  return `<div class="cols">
+    <div class="panel"><h2>Active Skills<span class="sp"></span><button class="tiny primary" onclick="addSkill('activeSkills')">+ Add</button></h2>
+      ${c.activeSkills.length? c.activeSkills.map((s,i)=>skillItem('activeSkills',s,i)).join('') : `<p class="muted">No active skills.</p>`}</div>
+    <div class="panel"><h2>Passive Skills<span class="sp"></span><button class="tiny primary" onclick="addSkill('passiveSkills')">+ Add</button></h2>
+      ${c.passiveSkills.length? c.passiveSkills.map((s,i)=>skillItem('passiveSkills',s,i)).join('') : `<p class="muted">No passive skills.</p>`}</div>
+  </div>`;
+}
+function skillItem(coll,s,i){
+  const open = ui.pop==='skill:'+coll+':'+i;
+  return `<div class="item">
+    <div class="hd">
+      <input class="nm" style="background:transparent;border:none;font-size:15px" value="${esc(s.name)}" onchange="editColl('${coll}',${i},'name',this.value)">
+      <span class="badge">Tier ${s.tier}</span>
+      <span class="sp"></span>
+      <button class="tiny danger" onclick="removeColl('${coll}',${i})">✕</button>
+    </div>
+    <textarea placeholder="Description…" onchange="editColl('${coll}',${i},'description',this.value)">${esc(s.description||'')}</textarea>
+    <div class="tierbar">
+      <button class="tiny" onclick="advanceSkill('${coll}',${i})">▲ Advance tier / evolve</button>
+      ${s.history&&s.history.length?`<button class="tiny ghost" onclick="togglePop('skill:${coll}:${i}')">${open?'Hide':'Show'} previous tiers (${s.history.length})</button>`:''}
+    </div>
+    ${open&&s.history&&s.history.length?`<div class="history">${s.history.map(h=>`<div><div class="h">Tier ${h.tier}: <b style="color:var(--dim)">${esc(h.name)}</b></div><div class="desc">${esc(h.description||'')}</div></div>`).join('<hr style="border:none;border-top:1px solid var(--edge);margin:8px 0">')}</div>`:''}
+  </div>`;
+}
+
+/* ---- Snapshots tab ---- */
+function snapshotsTab(c){
+  return `<div class="hint">Take a snapshot before a class change, evolution, or proficiency advance so the character's state at that level is preserved and can be reverted or referenced later. Snapshots are captured automatically when you change/evolve a class or advance proficiency.</div>
+  <div class="toolrow"><button class="primary" onclick="promptSnapshot()">📸 Take Snapshot Now</button></div>
+  ${c.snapshots.length? c.snapshots.map(s=>snapRow(s)).join('') : `<p class="muted">No snapshots yet.</p>`}`;
+}
+function snapRow(s){
+  const d=new Date(s.timestamp);
+  const phys = STATS.filter(x=>x.grp==='phys').reduce((a,x)=>a+computeStat(s.data,x.key).final,0);
+  const mag = STATS.filter(x=>x.grp==='mag').reduce((a,x)=>a+computeStat(s.data,x.key).final,0);
+  return `<div class="snaprow">
+    <div>
+      <div><b>${esc(s.label)}</b></div>
+      <div class="muted">Lv ${s.level} · ${esc(s.className||'—')} · ${s.rarity} ${s.proficiency} · Physical Σ${phys} / Magical Σ${mag} · ${d.toLocaleString()}</div>
+    </div>
+    <span class="sp"></span>
+    <button class="tiny" onclick="viewSnapshot('${s.id}')">View</button>
+    <button class="tiny" onclick="revertSnapshot('${s.id}')">Revert to this</button>
+    <button class="tiny danger" onclick="deleteSnapshot('${s.id}')">✕</button>
+  </div>`;
+}
+function viewSnapshot(sid){
+  const c=active(); const s=c.snapshots.find(x=>x.id===sid); if(!s) return;
+  const rows = STATS.map(st=>{const b=computeStat(s.data,st.key);return `<tr><td class="rar">${st.label}</td><td style="text-align:right">${b.final}</td><td style="text-align:right;color:var(--faint)">${b.base}/${b.free}/${b.cls}</td></tr>`;}).join('');
+  openModal(`<h2>${esc(s.label)}</h2>
+    <p class="muted">Lv ${s.level} · ${esc(s.className||'—')} · ${s.rarity} · ${s.proficiency}</p>
+    <table class="ref" style="margin-top:10px"><tr><th style="text-align:left">Stat</th><th>Final</th><th>Base/Free/Class</th></tr>${rows}</table>
+    <div class="actions"><button onclick="closeModal()">Close</button>
+      <button class="primary" onclick="closeModal();revertSnapshot('${s.id}')">Revert to this</button></div>`);
+}
+
+/* ---------------- Modals & flows ---------------- */
+function openModal(html){ document.getElementById('modalroot').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`; }
+function closeModal(){ document.getElementById('modalroot').innerHTML=''; }
+
+function promptSnapshot(){
+  openModal(`<h2>Take Snapshot</h2>
+    <div class="formrow"><label>Label</label><input id="snaplabel" value="Snapshot @ Lv ${active().level}"></div>
+    <div class="actions"><button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="const v=document.getElementById('snaplabel').value;closeModal();takeSnapshot(v)">Save Snapshot</button></div>`);
+}
+function bulkLevel(){
+  openModal(`<h2>Add Levels</h2>
+    <div class="formrow"><label>How many levels to add?</label><input type="number" id="bulkn" value="1" min="1"></div>
+    <p class="muted">Each level adds 3 free points and this class's per-level stat gains.</p>
+    <div class="actions"><button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="const n=+document.getElementById('bulkn').value||1;closeModal();levelUp(n)">Add ${''}Levels</button></div>`);
+}
+function openProficiency(){
+  const c=active(); const idx=PROFS.indexOf(c.class.proficiency);
+  if(idx>=PROFS.length-1){ openModal(`<h2>Advance Proficiency</h2><p>Already at <b>Master</b> — the highest proficiency.</p><div class="actions"><button onclick="closeModal()">Close</button></div>`); return; }
+  const next=PROFS[idx+1];
+  openModal(`<h2>Advance Proficiency</h2>
+    <p>Advance <b>${esc(c.class.name||'this class')}</b> from <b>${c.class.proficiency}</b> to <b>${next}</b>?</p>
+    <p class="muted">This raises stats-per-level from ${TABLE[c.class.rarity][idx]} to ${TABLE[c.class.rarity][idx+1]}. A snapshot will be taken automatically.</p>
+    <div class="formrow" style="margin-top:12px"><label><input type="checkbox" id="autofillprof" checked> Also scale per-level gains proportionally</label></div>
+    <div class="actions"><button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="doAdvanceProf(${document.getElementById?0:0})">Advance to ${next}</button></div>`);
+  // rebind to read checkbox at click time
+  document.querySelector('.modal .primary').setAttribute('onclick',`doAdvanceProf()`);
+}
+function doAdvanceProf(){
+  const c=active(); const idx=PROFS.indexOf(c.class.proficiency); const next=PROFS[idx+1];
+  const scale = document.getElementById('autofillprof') ? document.getElementById('autofillprof').checked : false;
+  const oldBudget=TABLE[c.class.rarity][idx], newBudget=TABLE[c.class.rarity][idx+1];
+  takeSnapshot('Before proficiency → '+next+' (Lv '+c.level+')');
+  c.class.proficiency=next;
+  if(scale && oldBudget>0){ STATKEYS.forEach(k=> c.class.perLevel[k]=Math.round((+c.class.perLevel[k]||0)*newBudget/oldBudget)); }
+  closeModal(); save(); render();
+}
+function openClassChange(){
+  const c=active();
+  openModal(`<h2>Change / Evolve Class</h2>
+    <p class="muted">A snapshot of the current class is saved first. Accumulated stats you've already earned are kept; the new class's per-level gains apply going forward.</p>
+    <div class="formrow"><label>New class name</label><input id="ccname" value="${esc(c.class.name)}"></div>
+    <div class="formrow"><label>New rarity</label>${sel(RARITIES,c.class.rarity,'',"ccrarity")}</div>
+    <div class="formrow"><label>New proficiency</label>${sel(PROFS,'Novice','',"ccprof")}
+      <span class="muted">Evolutions usually reset to Novice; adjacent work may keep a rank.</span></div>
+    <div class="formrow"><label><input type="checkbox" id="ccclear" checked> Clear per-level stat gains (set up fresh for the new class)</label></div>
+    <div class="actions"><button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="doClassChange()">Save Snapshot &amp; Switch</button></div>`);
+}
+function doClassChange(){
+  const c=active();
+  const name=document.getElementById('ccname').value;
+  const rarity=document.getElementById('ccrarity').value;
+  const prof=document.getElementById('ccprof').value;
+  const clear=document.getElementById('ccclear').checked;
+  takeSnapshot('Before class change: '+(c.class.name||'—')+' (Lv '+c.level+')');
+  c.class.name=name; c.class.rarity=rarity; c.class.proficiency=prof;
+  if(clear) c.class.perLevel=zeroStats(0);
+  closeModal(); save(); render();
+}
+
+/* ---------------- Collection helpers ---------------- */
+function emptyBonus(name){ return {name:name||'', description:'', flat:zeroStats(0), percent:zeroStats(0)}; }
+function addTitle(){ active().titles.push(Object.assign(emptyBonus('New Title'))); save(); render(); }
+function addGear(){ const g=emptyBonus('New Item'); g.active=true; active().gear.push(g); save(); render(); }
+function toggleGear(i){ active().gear[i].active=!active().gear[i].active; save(); render(); }
+function addSkill(coll){ active()[coll].push({name:'New Skill',description:'',tier:1,history:[]}); save(); render(); }
+function advanceSkill(coll,i){
+  const s=active()[coll][i];
+  s.history=s.history||[];
+  s.history.unshift({name:s.name, description:s.description, tier:s.tier});
+  s.tier=(s.tier||1)+1;
+  s.name=s.name+' (evolved)';
+  save(); render();
+}
+function removeColl(coll,i){ if(!confirm('Remove this entry?'))return; active()[coll].splice(i,1); save(); render(); }
+function editColl(coll,i,field,val){ active()[coll][i][field]=val; save(); if(field==='name')render(); }
+function editBonus(coll,i,kind,key,val){ active()[coll][i][kind][key]=(+val||0); save(); render(); }
+
+/* ---------------- Simple field editing ---------------- */
+function edit(path,val){ const c=active(); setDeep(c,path,val); save(); render(); }
+function editNum(path,val,min){ const c=active(); let n=Math.max(min||0,Math.round(+val||0)); setDeep(c,path,n); save(); render(); }
+function editStat(coll,key,val){ const c=active(); getDeep(c,coll)[key]=(+val||0); save(); render(); }
+function setDeep(o,path,val){ const p=path.split('.'); let t=o; for(let i=0;i<p.length-1;i++)t=t[p[i]]; t[p[p.length-1]]=val; }
+function getDeep(o,path){ return path.split('.').reduce((t,k)=>t[k],o); }
+
+/* ---------------- Character lifecycle ---------------- */
+function newCharacter(){ const c=blankCharacter(); DB.characters[c.id]=c; DB.activeId=c.id; ui.tab='stats'; save(); render(); }
+function selectChar(id){ DB.activeId=id; ui.tab='stats'; ui.pop=null; render(); }
+function deleteChar(id){ const c=DB.characters[id]; if(!confirm('Delete "'+(c.name||'this character')+'" permanently? Export first if you want a backup.')) return; delete DB.characters[id]; if(DB.activeId===id) DB.activeId=Object.keys(DB.characters)[0]||null; save(); render(); }
+
+/* ---------------- Import / Export ---------------- */
+function exportAll(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='status-screen-characters-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importFile(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      let chars = data.characters? Object.values(data.characters) : (Array.isArray(data)?data:[data]);
+      let added=0;
+      chars.forEach(ch=>{ if(ch&&ch.name!==undefined){ const c=normalize(clone(ch)); c.id=uid(); DB.characters[c.id]=c; DB.activeId=c.id; added++; } });
+      save(); render();
+      alert('Imported '+added+' character(s).');
+    }catch(err){ alert('Could not read that file: '+err.message); }
+  };
+  r.readAsText(f);
+  e.target.value='';
+}
+
+/* ---------------- small view helpers ---------------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+function sel(opts,val,onchange,id){ return `<select ${id?`id="${id}"`:''} ${onchange?`onchange="${onchange}"`:''}>${opts.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}</select>`; }
+function miniNum(label,val,onchange){ return `<div class="stat"><span class="snm">${label}</span><input type="number" value="${val||0}" onchange="${onchange}"></div>`; }
+
+/* ---------------- boot ---------------- */
+Object.values(DB.characters).forEach(normalize);
+render();
+</script>
+</body>
+</html>
