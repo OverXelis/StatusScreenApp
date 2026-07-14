@@ -9,7 +9,7 @@
     --bg:#0f1216; --panel:#171c23; --panel2:#1e252e; --edge:#2a333f;
     --ink:#e7edf3; --dim:#93a1b0; --faint:#63707e;
     --accent:#5aa9ff; --accent2:#7de0c0; --warn:#ffb454; --bad:#ff6b6b; --good:#79d18a;
-    --phys:#ff8a6b; --mag:#6ba8ff; --hp:#ff6b7d; --mp:#5aa9ff; --trait:#c88bff;
+    --phys:#ff8a6b; --mag:#6ba8ff; --hp:#ff6b7d; --mp:#5aa9ff; --trait:#c88bff; --tp:#e0c56b;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -88,6 +88,7 @@
   .stat .final{font-size:20px;font-weight:700;width:64px;text-align:right}
   .stat.phys .final{color:var(--phys)} .stat.mag .final{color:var(--mag)}
   .stat .alloc{display:flex;align-items:center;gap:4px;margin-left:auto}
+  .stat .alloc .atag{font-size:10px;font-weight:700;letter-spacing:.5px;opacity:.8}
   .stat .bd{color:var(--faint);font-size:11px;cursor:help;border-bottom:1px dotted var(--faint)}
   .popover{position:absolute;z-index:20;top:100%;left:9px;margin-top:4px;background:#0b0f14;border:1px solid var(--accent);border-radius:8px;padding:10px;min-width:230px;box-shadow:0 8px 30px rgba(0,0,0,.6);font-size:12px}
   .popover table{width:100%;border-collapse:collapse}
@@ -145,7 +146,7 @@
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand"><h1>⚔ STATUS SCREEN</h1><p>LitRPG character tracker</p></div>
+    <div class="brand"><h1>STATUS SCREEN</h1><p>LitRPG character tracker</p></div>
     <div class="charlist" id="charlist"></div>
     <div class="sidefoot">
       <button class="primary" onclick="newCharacter()">+ New Character</button>
@@ -208,6 +209,7 @@ function blankCharacter(){
     base: zeroStats(10),
     freeBank: 0,
     freeAlloc: zeroStats(0),
+    trainingAlloc: zeroStats(0),
     classStats: zeroStats(0),
     resources:{ hpStat:'constitution', hpMult:10, mpStat:'mana', mpMult:10, currentHp:null, currentMp:null },
     titles: [],
@@ -224,9 +226,11 @@ function blankCharacter(){
 function normalize(c){
   const b = blankCharacter();
   for(const k in b){ if(c[k]===undefined) c[k]=b[k]; }
+  if(!c.trainingAlloc) c.trainingAlloc=zeroStats(0);
   STATKEYS.forEach(k=>{
     if(c.base[k]===undefined)c.base[k]=0;
     if(c.freeAlloc[k]===undefined)c.freeAlloc[k]=0;
+    if(c.trainingAlloc[k]===undefined)c.trainingAlloc[k]=0;
     if(c.classStats[k]===undefined)c.classStats[k]=0;
     if(c.class.perLevel[k]===undefined)c.class.perLevel[k]=0;
   });
@@ -253,6 +257,7 @@ function roman(n){ n=Math.max(0,Math.round(+n||0)); if(!n) return 'I'; const m=[
 // Compute one stat with full breakdown, folding in traits per the v0.2 formula.
 function computeStat(data, key){
   const base=+data.base[key]||0, free=+data.freeAlloc[key]||0, cls=+data.classStats[key]||0;
+  const train=+((data.trainingAlloc||{})[key])||0;
   let titleFlat=0, titlePct=0;
   (data.titles||[]).forEach(t=>{ titleFlat+=+t.flat[key]||0; titlePct+=+t.percent[key]||0; });
   let traitFlat=0, traitPct=0, M=1;
@@ -261,13 +266,13 @@ function computeStat(data, key){
     else if(e.type==='flat') traitFlat+=+e.value||0;
     else if(e.type==='percent') traitPct+=+e.value||0;
   });
-  const subtotal = base+free+cls;
+  const subtotal = base+free+train+cls;
   const additive = subtotal + titleFlat + traitFlat;
   const afterTitles = M*additive * (1 + M*(titlePct+traitPct)/100);
   let gearFlat=0, gearPct=0;
   (data.items||[]).forEach(g=>{ if(g.active){ gearFlat+=+g.flat[key]||0; gearPct+=+g.percent[key]||0; } });
   const final = (afterTitles+gearFlat)*(1+gearPct/100);
-  return { base, free, cls, subtotal, titleFlat, titlePct, traitFlat, traitPct, M, additive, afterTitles, gearFlat, gearPct, final: Math.round(final) };
+  return { base, free, train, cls, subtotal, titleFlat, titlePct, traitFlat, traitPct, M, additive, afterTitles, gearFlat, gearPct, final: Math.round(final) };
 }
 function hpMax(c){ return Math.round(computeStat(c, c.resources.hpStat).final * (+c.resources.hpMult||0)); }
 function mpMax(c){ return Math.round(computeStat(c, c.resources.mpStat).final * (+c.resources.mpMult||0)); }
@@ -298,6 +303,11 @@ function allocFree(key,d){
   const c=active();
   if(d>0){ if(c.freeBank<=0) return; c.freeBank--; c.freeAlloc[key]++; }
   else { if(c.freeAlloc[key]<=0) return; c.freeAlloc[key]--; c.freeBank++; }
+  save(); render();
+}
+function allocTP(key,d){
+  const c=active();
+  c.trainingAlloc[key]=Math.max(0,(+c.trainingAlloc[key]||0)+d);
   save(); render();
 }
 function autoFillPerLevel(){
@@ -355,6 +365,7 @@ function topbar(c){
     <div class="field"><label>Class</label><span class="badge rarity-${c.class.rarity}">${esc(c.class.name||'—')} · ${c.class.rarity}</span></div>
     <div class="field"><label>Proficiency</label><span class="badge">${c.class.proficiency}</span></div>
     <div class="field"><label>Free Pts</label><span class="kpi"><b style="color:var(--accent2)">${c.freeBank}</b><span>bank</span></span></div>
+    <div class="field"><label>TP</label><span class="kpi"><b style="color:var(--tp)">${sumStats(c.trainingAlloc)}</b><span>trained</span></span></div>
     <div class="field"><label>HP</label><span class="kpi"><b style="color:var(--hp)">${hpMax(c)}</b><span>max</span></span></div>
     <div class="field"><label>MP</label><span class="kpi"><b style="color:var(--mp)">${mpMax(c)}</b><span>max</span></span></div>
   </div>${checklistWidget(c)}</div>`;
@@ -413,7 +424,7 @@ function homeTab(c){
   const statRows = g => STATS.filter(s=>s.grp===g).map(s=>`<div class="srow"><span>${s.label}</span><b>${computeStat(c,s.key).final}</b></div>`).join('');
   const skillLine = (arr,fmt)=> arr.length? arr.map(fmt).map(x=>`<div class="sline">${x}</div>`).join('') : `<div class="sline muted">—</div>`;
   return `
-  <div class="toolrow"><button class="primary" onclick="openStatusExport()">📋 Copy Status Screen</button>
+  <div class="toolrow"><button class="primary" onclick="openStatusExport()">Copy Status Screen</button>
     <span class="muted">Read-only overview. Edit anything from its own tab.</span></div>
   <div class="status">
     <div class="name">${esc(c.name)} <span class="muted" style="font-weight:400">— Level ${c.level} (${rankForLevel(c.level)}-Rank)</span></div>
@@ -452,6 +463,10 @@ function profileTab(c){
     </div>
     <div class="formrow"><label>Notes</label><textarea style="min-height:80px" placeholder="Anything else to remember…" onchange="edit('profile.notes',this.value)">${esc(c.profile.notes)}</textarea></div>
   </div>
+  <div class="panel"><h2>Sharing</h2>
+    <button class="primary" onclick="exportChar(active().id)">Export this character</button>
+    <span class="muted" style="margin-left:10px">Saves this character's full state (stats, snapshots, items, traits) to a file. Another user can load it with <b>Import</b> in the sidebar and see exactly what you see.</span>
+  </div>
   <div class="panel"><h2>Danger Zone</h2>
     <button class="danger" onclick="deleteCharCurrent()">Delete this character permanently</button>
     <span class="muted" style="margin-left:10px">Use “Backup (JSON)” first if you want a copy.</span>
@@ -462,7 +477,7 @@ function profileTab(c){
 function statsTab(c){
   const grp=g=>STATS.filter(s=>s.grp===g).map(s=>statRow(c,s)).join('');
   return `
-  <div class="hint">Final = (Base + Free + Class + Title/Trait flats) × trait multiplier × (1 + Title/Trait %) then Gear last. Hover “breakdown” for the math.</div>
+  <div class="hint">Final = (Base + Free + Training + Class + Title/Trait flats) × trait multiplier × (1 + Title/Trait %) then Gear last. Each stat has <b style="color:var(--accent2)">FP</b> (free points, from the bank) and <b style="color:var(--tp)">TP</b> (training points, added freely) controls. Hover “breakdown” for the math.</div>
   <div class="panel"><h2>Attributes<span class="sp"></span><span class="muted">Free-point bank: <b style="color:var(--accent2)">${c.freeBank}</b></span></h2>
     <div class="cols"><div class="statgroup phys"><h3>Physical</h3>${grp('phys')}</div><div class="statgroup mag"><h3>Magical</h3>${grp('mag')}</div></div>
   </div>
@@ -487,15 +502,20 @@ function statRow(c,s){
   return `<div class="stat ${s.grp}">
     <span class="snm">${s.label}</span><span class="final">${b.final}</span>
     <span class="bd" onclick="togglePop('stat:${s.key}')">breakdown</span>
-    <span class="alloc"><button class="tiny" onclick="allocFree('${s.key}',-1)" title="Refund">−</button>
-      <span title="Free points here" style="min-width:16px;text-align:center;color:var(--accent2)">${c.freeAlloc[s.key]}</span>
-      <button class="tiny" onclick="allocFree('${s.key}',1)" title="Spend">+</button></span>
+    <span class="alloc"><span class="atag" style="color:var(--accent2)" title="Free points">FP</span>
+      <button class="tiny" onclick="allocFree('${s.key}',-1)" title="Refund free point">−</button>
+      <span style="min-width:16px;text-align:center;color:var(--accent2)">${c.freeAlloc[s.key]}</span>
+      <button class="tiny" onclick="allocFree('${s.key}',1)" title="Spend free point">+</button></span>
+    <span class="alloc" style="margin-left:8px"><span class="atag" style="color:var(--tp)" title="Training points">TP</span>
+      <button class="tiny" onclick="allocTP('${s.key}',-1)" title="Remove training point">−</button>
+      <span style="min-width:16px;text-align:center;color:var(--tp)">${c.trainingAlloc[s.key]}</span>
+      <button class="tiny" onclick="allocTP('${s.key}',1)" title="Add training point">+</button></span>
     ${open?popover(b):''}</div>`;
 }
 function popover(b){
   const row=(l,v,col)=>`<tr><td>${l}</td><td style="color:${col||'inherit'}">${v}</td></tr>`;
   return `<div class="popover"><table>
-    ${row('Base',b.base)}${row('Free points','+'+b.free,'var(--accent2)')}${row('Class','+'+b.cls,'var(--phys)')}
+    ${row('Base',b.base)}${row('Free points','+'+b.free,'var(--accent2)')}${b.train?row('Training','+'+b.train,'var(--tp)'):''}${row('Class','+'+b.cls,'var(--phys)')}
     ${b.titleFlat?row('Title flat','+'+b.titleFlat,'var(--good)'):''}
     ${b.traitFlat?row('Trait flat','+'+b.traitFlat,'var(--trait)'):''}
     <tr class="tot"><td>Additive</td><td>${b.additive}</td></tr>
@@ -520,10 +540,10 @@ function classTab(c){
       <div class="mf"><label>Proficiency</label>${sel(PROFS,c.class.proficiency,"edit('class.proficiency',this.value)")}</div>
     </div>
     <div class="toolrow" style="margin-top:14px">
-      <button class="primary" onclick="levelUp(1)">▲ Level Up</button>
+      <button class="primary" onclick="levelUp(1)">Level Up</button>
       <button onclick="bulkLevel()">Add multiple levels…</button>
-      <button onclick="openProficiency()">Advance Proficiency ▸</button>
-      <button onclick="openClassChange()">Change / Evolve Class ▸</button>
+      <button onclick="openProficiency()">Advance Proficiency</button>
+      <button onclick="openClassChange()">Change / Evolve Class</button>
     </div>
     ${c.class.name? '' : `<div class="hint" style="background:#2a2312;border-color:#5a4620;color:var(--warn);margin-bottom:12px">No class assigned yet — class points aren't granted on Level Up until you name a class (characters receive their class at Level 10).</div>`}
     <div class="hint" style="margin-bottom:0">Grants <b>${budget}</b> stats/level (${c.class.rarity} · ${c.class.proficiency}). Assigned <b style="color:${assigned===budget?'var(--good)':'var(--warn)'}">${assigned}</b>. <button class="tiny" onclick="autoFillPerLevel()">Auto-distribute ${budget}</button></div>
@@ -552,11 +572,14 @@ function titleItem(c,t,i){
   const flats=STATS.filter(s=>(+t.flat[s.key])||(+t.percent[s.key]));
   const open=ui.pop==='title:'+i;
   const featured=c.featuredTitleId===t.id;
+  const sum=bonusSummary(t.flat,t.percent);
   return `<div class="item">
     <div class="hd">
       <input class="nm" style="background:transparent;border:none;font-size:15px" value="${esc(t.name)}" onchange="editColl('titles',${i},'name',this.value)">
+      <span class="badge ${sum?'':'muted'}">${sum?esc(sum):'No bonus'}</span>
       <span class="sp"></span>
       <label style="display:flex;align-items:center;gap:4px;color:${featured?'var(--warn)':'var(--faint)'}"><input type="radio" name="feat" ${featured?'checked':''} onclick="setFeatured('${t.id}')"> Featured</label>
+      <button class="tiny" onclick="copyText(titleText(active().titles[${i}]))">Copy</button>
       <button class="tiny" onclick="togglePop('title:${i}')">${open?'Close':'Edit bonuses'}</button>
       <button class="tiny danger" onclick="removeColl('titles',${i})">✕</button>
     </div>
@@ -581,12 +604,23 @@ function traitsTab(c){
     <span class="badge ${n>3?'':'muted'}" style="${n>3?'color:var(--warn);border-color:var(--warn)':''}">${n}/3 ${n>3?'— over normal limit':''}</span></div>
   ${n? c.traits.map((t,i)=>traitItem(t,i)).join('') : `<p class="muted">No traits yet.</p>`}`;
 }
+function traitEffectSummary(e){
+  if(!e||e.type==='none'||!e.value) return 'Passive';
+  const st=cap1(e.stat);
+  if(e.type==='multiplier') return `×${e.value} ${st}`;
+  if(e.type==='percent') return `+${e.value}% ${st}`;
+  return `+${e.value} ${st}`;
+}
 function traitItem(t,i){
   const e=t.effect||{type:'none',stat:'willpower',value:0};
+  const summ=traitEffectSummary(e);
   return `<div class="item">
     <div class="hd">
       <input class="nm" style="background:transparent;border:none;font-size:15px" value="${esc(t.name)}" onchange="editColl('traits',${i},'name',this.value)">
-      <span class="sp"></span><button class="tiny danger" onclick="removeColl('traits',${i})">✕</button>
+      <span class="badge ${summ==='Passive'?'muted':''}" style="${summ==='Passive'?'':'color:var(--trait);border-color:#4a2f66'}">${esc(summ)}</span>
+      <span class="sp"></span>
+      <button class="tiny" onclick="copyText(traitText(active().traits[${i}]))">Copy</button>
+      <button class="tiny danger" onclick="removeColl('traits',${i})">✕</button>
     </div>
     <textarea placeholder="Description…" onchange="editColl('traits',${i},'description',this.value)">${esc(t.description||'')}</textarea>
     <div class="fieldgrid" style="margin-top:10px">
@@ -624,7 +658,7 @@ function skillItem(coll,s,i){
     <div class="fieldgrid" style="margin:8px 0">${rankControls}${bondShare}</div>
     <textarea placeholder="Description…" onchange="editColl('${coll}',${i},'description',this.value)">${esc(s.description||'')}</textarea>
     <div class="tierbar">
-      <button class="tiny" onclick="evolveSkill('${coll}',${i})">▲ ${isPassive?'Advance tier':'Evolve'} (archive current)</button>
+      <button class="tiny" onclick="evolveSkill('${coll}',${i})">${isPassive?'Advance tier':'Evolve'} (archive current)</button>
       ${s.history&&s.history.length?`<button class="tiny ghost" onclick="togglePop('skill:${coll}:${i}')">${open?'Hide':'Show'} previous (${s.history.length})</button>`:''}
     </div>
     ${open&&s.history&&s.history.length?`<div class="history">${s.history.map(h=>`<div><div class="h"><b style="color:var(--dim)">${esc(h.name)}</b> ${'tier'in h?`(Tier ${roman(h.tier)})`:`(${h.proficiency} - Level ${h.level})`}</div><div class="muted" style="white-space:pre-wrap">${esc(h.description||'')}</div></div>`).join('<hr style="border:none;border-top:1px solid var(--edge);margin:8px 0">')}</div>`:''}
@@ -656,7 +690,7 @@ function itemCard(it,i){
       <input class="nm" style="background:transparent;border:none;font-size:15px;min-width:180px" value="${esc(it.name)}" onchange="editColl('items',${i},'name',this.value)">
       <span class="badge rarity-${it.rarity}">${it.rarity}</span>
       <span class="sp"></span>
-      <button class="tiny" onclick="copyText(itemText(active().items[${i}]))">📋 Copy</button>
+      <button class="tiny" onclick="copyText(itemText(active().items[${i}]))">Copy</button>
       <button class="tiny" onclick="togglePop('item:${i}')">${open?'Close':'Stat bonuses'}</button>
       <button class="tiny danger" onclick="removeColl('items',${i})">✕</button>
     </div>
@@ -676,7 +710,7 @@ function itemCard(it,i){
 /* ---- Snapshots tab ---- */
 function snapshotsTab(c){
   return `<div class="hint">Snapshots preserve a character's full state (stats, class, skills, items, profile) at a level. Auto-taken at Level 10 (class unlock), class change/evolve, and proficiency advance.</div>
-  <div class="toolrow"><button class="primary" onclick="promptSnapshot()">📸 Take Snapshot Now</button></div>
+  <div class="toolrow"><button class="primary" onclick="promptSnapshot()">Take Snapshot Now</button></div>
   ${c.snapshots.length? c.snapshots.map(s=>snapRow(s)).join('') : `<p class="muted">No snapshots yet.</p>`}`;
 }
 function snapRow(s){
@@ -692,9 +726,9 @@ function snapRow(s){
 }
 function viewSnapshot(sid){
   const c=active(); const s=c.snapshots.find(x=>x.id===sid); if(!s) return;
-  const rows=STATS.map(st=>{const b=computeStat(s.data,st.key);return `<tr><td class="rar">${st.label}</td><td style="text-align:right">${b.final}</td><td style="text-align:right;color:var(--faint)">${b.base}/${b.free}/${b.cls}</td></tr>`;}).join('');
+  const rows=STATS.map(st=>{const b=computeStat(s.data,st.key);return `<tr><td class="rar">${st.label}</td><td style="text-align:right">${b.final}</td><td style="text-align:right;color:var(--faint)">${b.base}/${b.free}/${b.train}/${b.cls}</td></tr>`;}).join('');
   openModal(`<h2>${esc(s.label)}</h2><p class="muted">Lv ${s.level} · ${esc(s.className||'—')} · ${s.rarity} · ${s.proficiency}</p>
-    <table class="ref" style="margin-top:10px"><tr><th style="text-align:left">Stat</th><th>Final</th><th>Base/Free/Class</th></tr>${rows}</table>
+    <table class="ref" style="margin-top:10px"><tr><th style="text-align:left">Stat</th><th>Final</th><th>Base/Free/Train/Class</th></tr>${rows}</table>
     <div class="actions"><button onclick="closeModal()">Close</button><button class="primary" onclick="closeModal();revertSnapshot('${s.id}')">Revert to this</button></div>`);
 }
 
@@ -735,12 +769,38 @@ function itemText(it){
   if(it.description) L.push('',it.description);
   return L.join('\n');
 }
+// Human-readable summary of flat/percent stat bonuses, condensing "all physical/magical/stats".
+function bonusSummary(flat,percent){
+  flat=flat||{}; percent=percent||{};
+  const parts=[];
+  [['flat',flat,''],['percent',percent,'%']].forEach(([kind,obj,suffix])=>{
+    const phys=STATS.filter(s=>s.grp==='phys'), mag=STATS.filter(s=>s.grp==='mag');
+    const val=s=>+obj[s.key]||0;
+    const allEq=(arr)=>arr.every(s=>val(s)===val(arr[0]))&&val(arr[0])!==0;
+    if(allEq(STATS)){ parts.push(`+${val(STATS[0])}${suffix} to all stats`); return; }
+    let used=new Set();
+    if(allEq(phys)){ parts.push(`+${val(phys[0])}${suffix} to all physical stats`); phys.forEach(s=>used.add(s.key)); }
+    if(allEq(mag)){ parts.push(`+${val(mag[0])}${suffix} to all magical stats`); mag.forEach(s=>used.add(s.key)); }
+    STATS.forEach(s=>{ if(used.has(s.key)) return; const v=val(s); if(v) parts.push(`+${v}${suffix} ${s.label}`); });
+  });
+  return parts.join(', ');
+}
+function titleText(t){
+  const L=['***','',`**Title: ${t.name}**`,'',t.description||''];
+  const sum=bonusSummary(t.flat,t.percent);
+  if(sum) L.push('',`*${sum}*`);
+  L.push('','***');
+  return L.join('\n');
+}
+function traitText(t){
+  return ['***','',`**Trait: ${t.name}**`,'',t.description||'','','***'].join('\n');
+}
 function openStatusExport(){
   const txt=statusScreenText(active());
   openModal(`<h2>Status Screen — copy into your story</h2>
     <pre class="export" id="exporttext">${esc(txt)}</pre>
     <div class="actions"><button onclick="closeModal()">Close</button>
-      <button class="primary" onclick="copyText(document.getElementById('exporttext').textContent)">📋 Copy to clipboard</button></div>`);
+      <button class="primary" onclick="copyText(document.getElementById('exporttext').textContent)">Copy to clipboard</button></div>`);
 }
 
 /* ---------------- Modals & flows ---------------- */
@@ -820,11 +880,14 @@ function selectChar(id){ DB.activeId=id; ui.tab='home'; ui.pop=null; render(); }
 function deleteCharCurrent(){ const c=active(); if(!c) return; if(!confirm('Delete "'+(c.name||'this character')+'" permanently? Back up first if you want a copy.'))return; delete DB.characters[c.id]; DB.activeId=Object.keys(DB.characters)[0]||null; save(); render(); }
 
 /* ---------------- Import / Export ---------------- */
-function exportAll(){
-  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+function downloadJSON(obj,filename){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download='status-screen-characters-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(a.href);
+  a.download=filename; a.click(); URL.revokeObjectURL(a.href);
 }
+function slug(s){ return String(s||'character').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'character'; }
+function exportAll(){ downloadJSON(DB,'status-screen-characters-'+new Date().toISOString().slice(0,10)+'.json'); }
+function exportChar(id){ const c=DB.characters[id]||active(); if(!c) return; downloadJSON(c,'character-'+slug(c.name)+'.json'); toast('Exported '+(c.name||'character')); }
 function importFile(e){
   const f=e.target.files[0]; if(!f)return; const r=new FileReader();
   r.onload=()=>{ try{
